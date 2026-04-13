@@ -25,4 +25,4 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.Run();
-// Added search/filter functionality to the Index action of the HomeControllerrrrr
+// Fixed navbar layout bug 
