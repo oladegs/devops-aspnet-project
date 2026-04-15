@@ -50,6 +50,13 @@ stages:
         - script: echo "Releasing build artifacts..."
           displayName: "Release Step"
 
+        - task: GitHubComment@0
+          displayName: "Verify PAT GitHub Connection"
+          inputs:
+            gitHubConnection: 'github-pat-connection'
+            repositoryName: 'oladegs/devops-aspnet-project'
+            comment: 'Azure DevOps pipeline successfully used the PAT-based GitHub service connection.'
+
 - stage: Dev
   displayName: "Deploy to Dev"
   dependsOn: Deliver
