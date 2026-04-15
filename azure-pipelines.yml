@@ -17,7 +17,7 @@ stages:
             packageType: 'sdk'
             version: '8.0.x'
 
-        - task: SonarCloudPrepare@3
+        - task: SonarCloudPrepare@3.4.3
           displayName: "Prepare SonarCloud Analysis"
           inputs:
             SonarCloud: 'sonarcloud-connection'
@@ -32,10 +32,10 @@ stages:
         - script: dotnet test --collect:"XPlat Code Coverage"
           displayName: "Run Tests & Code Coverage"
 
-        - task: SonarCloudAnalyze@3
+        - task: SonarCloudAnalyze@3.4.3
           displayName: "Run SonarCloud Analysis"
 
-        - task: SonarCloudPublish@3
+        - task: SonarCloudPublish@3.4.3
           displayName: "Publish Quality Gate"
           inputs:
             pollingTimeoutSec: '300'
