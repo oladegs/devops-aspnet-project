@@ -5,45 +5,57 @@ pool:
   vmImage: 'windows-latest'
 
 stages:
-# ------------------ BUILD STAGE ------------------
 - stage: Build
   displayName: "Build Stage"
   jobs:
     - job: BuildJob
       displayName: "Build ASP.NET App"
       steps:
-
-        # Install .NET
         - task: UseDotNet@2
+          displayName: "Install .NET SDK"
           inputs:
             packageType: 'sdk'
             version: '8.0.x'
 
-        # Build Step
+        - task: SonarCloudPrepare@3
+          displayName: "Prepare SonarCloud Analysis"
+          inputs:
+            SonarCloud: 'sonarcloud-connection'
+            organization: 'oladegs'
+            scannerMode: 'dotnet'
+            projectKey: 'oladegs_devops-aspnet-project'
+            projectName: 'devops-aspnet-project'
+
         - script: dotnet build --configuration Release
           displayName: "Build Project"
 
-        # Test + Code Coverage Step
         - script: dotnet test --collect:"XPlat Code Coverage"
           displayName: "Run Tests & Code Coverage"
 
-# ------------------ DELIVERY STAGE ------------------
+        - task: SonarCloudAnalyze@3
+          displayName: "Run SonarCloud Analysis"
+
+        - task: SonarCloudPublish@3
+          displayName: "Publish Quality Gate"
+          inputs:
+            pollingTimeoutSec: '300'
+
 - stage: Deliver
   displayName: "Deliver Stage"
   dependsOn: Build
   jobs:
     - job: DeliverJob
+      displayName: "Deliver Job"
       steps:
         - script: echo "Releasing build artifacts..."
           displayName: "Release Step"
-
-# ------------------ DEPLOYMENT STAGES ------------------
 
 - stage: Dev
   displayName: "Deploy to Dev"
   dependsOn: Deliver
   jobs:
     - job: DevDeploy
+      displayName: "Dev Deploy Job"
       steps:
         - script: echo "Deploying to Dev Environment"
           displayName: "Deploy Dev"
@@ -53,6 +65,7 @@ stages:
   dependsOn: Dev
   jobs:
     - job: QATDeploy
+      displayName: "QAT Deploy Job"
       steps:
         - script: echo "Deploying to QAT Environment"
           displayName: "Deploy QAT"
@@ -62,6 +75,7 @@ stages:
   dependsOn: QAT
   jobs:
     - job: StagingDeploy
+      displayName: "Staging Deploy Job"
       steps:
         - script: echo "Deploying to Staging Environment"
           displayName: "Deploy Staging"
@@ -71,6 +85,7 @@ stages:
   dependsOn: Staging
   jobs:
     - job: ProdDeploy
+      displayName: "Production Deploy Job"
       steps:
         - script: echo "Deploying to Production Environment"
           displayName: "Deploy Production"
