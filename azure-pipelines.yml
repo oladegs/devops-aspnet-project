@@ -2,11 +2,7 @@ trigger:
 - main
 
 pool:
-  name: 'Default'
-
-variables:
-  buildConfiguration: 'Release'
-  artifactName: 'drop'
+  name: 'Default' 
 
 stages:
 - stage: Build
@@ -15,15 +11,13 @@ stages:
     - job: BuildJob
       displayName: "Build ASP.NET App"
       steps:
-        - checkout: self
-
         - task: UseDotNet@2
           displayName: "Install .NET SDK"
           inputs:
             packageType: 'sdk'
             version: '8.0.x'
 
-        - task: SonarCloudPrepare@3
+        - task: SonarCloudPrepare@3.4.3
           displayName: "Prepare SonarCloud Analysis"
           inputs:
             SonarCloud: 'sonarcloud-connection'
@@ -32,31 +26,34 @@ stages:
             projectKey: 'oladegs_devops-aspnet-project'
             projectName: 'devops-aspnet-project'
 
-        - script: dotnet restore
-          displayName: "Restore Packages"
-
-        - script: dotnet build --configuration $(buildConfiguration) --no-restore
+        - script: dotnet build --configuration Release
           displayName: "Build Project"
 
-        - script: dotnet test --configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"
+        - script: dotnet test --collect:"XPlat Code Coverage"
           displayName: "Run Tests & Code Coverage"
 
-        - task: SonarCloudAnalyze@3
+        - task: SonarCloudAnalyze@3.4.3
           displayName: "Run SonarCloud Analysis"
 
-        - task: SonarCloudPublish@3
+        - task: SonarCloudPublish@3.4.3
           displayName: "Publish Quality Gate"
           inputs:
             pollingTimeoutSec: '300'
 
-        - script: dotnet publish --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)
-          displayName: "Publish App"
+        # --- FIX 1: Package and Publish the Artifact ---
+        - task: DotNetCoreCLI@2
+          displayName: 'Publish and Zip Project'
+          inputs:
+            command: 'publish'
+            publishWebProjects: true
+            arguments: '--configuration Release --output $(Build.ArtifactStagingDirectory)'
+            zipAfterPublish: true
 
         - task: PublishBuildArtifacts@1
-          displayName: "Publish Build Artifact"
+          displayName: 'Publish Artifact: drop'
           inputs:
             PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-            ArtifactName: '$(artifactName)'
+            ArtifactName: 'drop'
             publishLocation: 'Container'
 
 - stage: Deliver
@@ -66,14 +63,6 @@ stages:
     - job: DeliverJob
       displayName: "Deliver Job"
       steps:
-        - task: DownloadBuildArtifacts@1
-          displayName: "Download Build Artifact"
-          inputs:
-            buildType: 'current'
-            downloadType: 'single'
-            artifactName: '$(artifactName)'
-            downloadPath: '$(Pipeline.Workspace)'
-
         - script: echo "Releasing build artifacts..."
           displayName: "Release Step"
 
@@ -84,6 +73,7 @@ stages:
             repositoryName: 'oladegs/devops-aspnet-project'
             comment: 'Azure DevOps pipeline successfully used the PAT-based GitHub service connection.'
 
+# --- FIX 2: Download and Deploy the Artifact for each Environment ---
 - stage: Dev
   displayName: "Deploy to Dev"
   dependsOn: Deliver
@@ -91,16 +81,20 @@ stages:
     - job: DevDeploy
       displayName: "Dev Deploy Job"
       steps:
-        - task: DownloadBuildArtifacts@1
-          displayName: "Download Build Artifact"
+        - task: DownloadBuildArtifacts@0
+          displayName: 'Download Artifact'
           inputs:
             buildType: 'current'
             downloadType: 'single'
-            artifactName: '$(artifactName)'
-            downloadPath: '$(Pipeline.Workspace)'
-
-        - script: echo "Deploying to Dev Environment"
-          displayName: "Deploy Dev"
+            artifactName: 'drop'
+            downloadPath: '$(System.ArtifactsDirectory)'
+            
+        - task: ExtractFiles@1
+          displayName: "Extract and Deploy to Dev Folder"
+          inputs:
+            archiveFilePatterns: '$(System.ArtifactsDirectory)/drop/*.zip'
+            destinationFolder: 'C:\Deployments\Dev'
+            cleanDestinationFolder: true
 
 - stage: QAT
   displayName: "Deploy to QAT"
@@ -109,16 +103,20 @@ stages:
     - job: QATDeploy
       displayName: "QAT Deploy Job"
       steps:
-        - task: DownloadBuildArtifacts@1
-          displayName: "Download Build Artifact"
+        - task: DownloadBuildArtifacts@0
+          displayName: 'Download Artifact'
           inputs:
             buildType: 'current'
             downloadType: 'single'
-            artifactName: '$(artifactName)'
-            downloadPath: '$(Pipeline.Workspace)'
-
-        - script: echo "Deploying to QAT Environment"
-          displayName: "Deploy QAT"
+            artifactName: 'drop'
+            downloadPath: '$(System.ArtifactsDirectory)'
+            
+        - task: ExtractFiles@1
+          displayName: "Extract and Deploy to QAT Folder"
+          inputs:
+            archiveFilePatterns: '$(System.ArtifactsDirectory)/drop/*.zip'
+            destinationFolder: 'C:\Deployments\QAT'
+            cleanDestinationFolder: true
 
 - stage: Staging
   displayName: "Deploy to Staging"
@@ -127,16 +125,20 @@ stages:
     - job: StagingDeploy
       displayName: "Staging Deploy Job"
       steps:
-        - task: DownloadBuildArtifacts@1
-          displayName: "Download Build Artifact"
+        - task: DownloadBuildArtifacts@0
+          displayName: 'Download Artifact'
           inputs:
             buildType: 'current'
             downloadType: 'single'
-            artifactName: '$(artifactName)'
-            downloadPath: '$(Pipeline.Workspace)'
-
-        - script: echo "Deploying to Staging Environment"
-          displayName: "Deploy Staging"
+            artifactName: 'drop'
+            downloadPath: '$(System.ArtifactsDirectory)'
+            
+        - task: ExtractFiles@1
+          displayName: "Extract and Deploy to Staging Folder"
+          inputs:
+            archiveFilePatterns: '$(System.ArtifactsDirectory)/drop/*.zip'
+            destinationFolder: 'C:\Deployments\Staging'
+            cleanDestinationFolder: true
 
 - stage: Production
   displayName: "Deploy to Production"
@@ -145,13 +147,17 @@ stages:
     - job: ProdDeploy
       displayName: "Production Deploy Job"
       steps:
-        - task: DownloadBuildArtifacts@1
-          displayName: "Download Build Artifact"
+        - task: DownloadBuildArtifacts@0
+          displayName: 'Download Artifact'
           inputs:
             buildType: 'current'
             downloadType: 'single'
-            artifactName: '$(artifactName)'
-            downloadPath: '$(Pipeline.Workspace)'
-
-        - script: echo "Deploying to Production Environment"
-          displayName: "Deploy Production"
+            artifactName: 'drop'
+            downloadPath: '$(System.ArtifactsDirectory)'
+            
+        - task: ExtractFiles@1
+          displayName: "Extract and Deploy to Production Folder"
+          inputs:
+            archiveFilePatterns: '$(System.ArtifactsDirectory)/drop/*.zip'
+            destinationFolder: 'C:\Deployments\Production'
+            cleanDestinationFolder: true
